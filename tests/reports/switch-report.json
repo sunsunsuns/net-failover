@@ -1,0 +1,43 @@
+{
+  "tested_at": "2026-10-31T22:29:09+0800",
+  "links": [
+    {
+      "name": "ethernet",
+      "device": "eth0"
+    },
+    {
+      "name": "wifi",
+      "device": "wlan0"
+    },
+    {
+      "name": "cellular",
+      "device": "enx020c29a39b6d"
+    }
+  ],
+  "results": [
+    {
+      "scenario": "断开 ethernet",
+      "expected": "wlan0",
+      "route_switch_s": 1.13,
+      "outage_s": 0.32
+    },
+    {
+      "scenario": "断开 wifi",
+      "expected": "enx020c29a39b6d",
+      "route_switch_s": 0.6,
+      "outage_s": 0.2
+    },
+    {
+      "scenario": "恢复 ethernet",
+      "expected": "eth0",
+      "route_switch_s": 6.29,
+      "outage_s": 2.24
+    },
+    {
+      "scenario": "恢复 wifi",
+      "expected": "eth0",
+      "route_switch_s": 0.46,
+      "outage_s": 0.46
+    }
+  ]
+}

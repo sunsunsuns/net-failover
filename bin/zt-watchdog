@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""zt-watchdog — 守护 ZeroTier 服务，挂了/掉线自动重启.
+
+每 interval 秒检查一次：
+  * systemd 服务不是 active        -> 立刻重启
+  * zerotier-cli info 连续 offline_threshold 次 OFFLINE/失败 -> 重启
+两次重启之间至少间隔 restart_cooldown 秒，避免重启风暴。
+"""
+
+import configparser
+import os
+import subprocess
+import sys
+import time
+
+DEFAULT_CONFIG = os.environ.get("NET_FAILOVER_CONFIG", "/etc/net-failover/config.ini")
+
+
+def log(msg):
+    print(time.strftime("%Y-%m-%d %H:%M:%S"), msg, flush=True)
+
+
+def run(cmd, timeout=15):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except Exception:
+        return None
+
+
+class Watchdog:
+    def __init__(self, path):
+        cp = configparser.ConfigParser()
+        if not cp.read(path, encoding="utf-8"):
+            raise SystemExit("zt-watchdog: 读不到配置文件 %s" % path)
+        section = cp["zerotier"] if cp.has_section("zerotier") else {}
+        self.enabled = str(section.get("enabled", "true")).strip().lower() in (
+            "1", "true", "yes", "on")
+        self.service = section.get("service", "zerotier-one").strip()
+        self.interval = float(section.get("interval", 30))
+        self.offline_threshold = int(section.get("offline_threshold", 3))
+        self.restart_cooldown = float(section.get("restart_cooldown", 120))
+        self.failures = 0
+        self.last_restart = 0.0
+
+    def service_active(self):
+        r = run(["systemctl", "is-active", "--quiet", self.service])
+        return r is not None and r.returncode == 0
+
+    def node_status(self):
+        """返回 'ONLINE' / 'OFFLINE' / 'UNKNOWN'。"""
+        r = run(["zerotier-cli", "-j", "info"])
+        if r is None or r.returncode != 0:
+            r = run(["zerotier-cli", "info"])
+            if r is None or r.returncode != 0:
+                return "UNKNOWN"
+        out = (r.stdout or "").upper()
+        if "ONLINE" in out and "OFFLINE" not in out:
+            return "ONLINE"
+        if "OFFLINE" in out:
+            return "OFFLINE"
+        return "UNKNOWN"
+
+    def restart(self, reason):
+        now = time.time()
+        if now - self.last_restart < self.restart_cooldown:
+            log("跳过重启（冷却中）：%s" % reason)
+            return
+        log("重启 %s：%s" % (self.service, reason))
+        run(["systemctl", "restart", self.service], timeout=60)
+        self.last_restart = now
+        self.failures = 0
+
+    def run(self):
+        if not self.enabled:
+            log("zt-watchdog 未启用（config.ini [zerotier] enabled=false），退出")
+            return
+        log("zt-watchdog 启动：service=%s interval=%ss threshold=%d"
+            % (self.service, self.interval, self.offline_threshold))
+        while True:
+            try:
+                if not self.service_active():
+                    self.restart("服务不是 active")
+                else:
+                    status = self.node_status()
+                    if status == "ONLINE":
+                        self.failures = 0
+                    else:
+                        self.failures += 1
+                        log("节点状态 %s (%d/%d)" % (status, self.failures, self.offline_threshold))
+                        if self.failures >= self.offline_threshold:
+                            self.restart("节点连续 %d 次非 ONLINE" % self.failures)
+            except Exception as e:
+                log("异常：%s" % e)
+            time.sleep(self.interval)
+
+
+if __name__ == "__main__":
+    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG
+    try:
+        Watchdog(path).run()
+    except KeyboardInterrupt:
+        pass

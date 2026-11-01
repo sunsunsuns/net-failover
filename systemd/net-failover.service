@@ -1,0 +1,17 @@
+[Unit]
+Description=net-failover: automatic uplink failover (ethernet > wifi > cellular)
+Documentation=http://10.209.251.101:8087/root/net-failover
+After=NetworkManager.service network.target
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/net-failover /etc/net-failover/config.ini
+Restart=always
+RestartSec=3
+# 路由操作需要 CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=zt-watchdog: keep ZeroTier online (auto restart when down)
+Documentation=http://10.209.251.101:8087/root/net-failover
+After=zerotier-one.service
+Wants=zerotier-one.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/zt-watchdog /etc/net-failover/config.ini
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

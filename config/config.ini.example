@@ -1,0 +1,56 @@
+# net-failover 配置
+# 安装位置：/etc/net-failover/config.ini
+# 改完执行：sudo systemctl restart net-failover
+
+[general]
+# 选中链路会被提升到这个 metric，数值越小越优先（要小于所有 [link:*] 的 metric）
+promote_metric = 50
+# 只打印将要执行的路由命令，不真正修改（调试用）
+dry_run = false
+# 网关缓存 / 运行状态
+state_file = /run/net-failover-gw.json
+# 发生切换时执行的命令（可留空），例如发通知
+on_switch_hook =
+
+[probe]
+# 健康探测目标，host:port，按顺序尝试，任一通即视为健康
+# 注意：4G 链路通常封 ICMP，所以这里必须用 TCP，不能用 ping
+targets = 223.5.5.5:443, 119.29.29.29:443
+timeout = 1.5
+interval = 1.5
+# 当前链路连续失败多少次才降级
+strikes_down = 3
+# 更高优先级链路连续成功多少次才升回
+strikes_up = 3
+# 两次"升回"之间至少间隔多少秒
+cooldown = 15
+# 新链路必须连续健康多少秒，才有资格升为主出口（防抖动）
+settle = 8
+
+# ===== 链路 =====
+# 顺序即优先级（上面的优先）。metric 越小越优先，请保持与顺序一致。
+# 设备不存在时会被自动跳过，不需要删掉对应段。
+
+[link:ethernet]
+device = eth0
+metric = 600
+
+[link:wifi]
+device = wlan0
+metric = 700
+# 无线信号双门限（dBm，只对无线链路有效；不写则不按信号判断）：
+# 低于 rssi_down -> 主动切走（不等断链）；高于 rssi_up -> 才允许切回。
+rssi_down = -75
+rssi_up = -65
+
+[link:cellular]
+device = enx020c29a39b6d
+metric = 800
+
+# ===== ZeroTier 守护 =====
+[zerotier]
+enabled = true
+service = zerotier-one
+interval = 30
+offline_threshold = 3
+restart_cooldown = 120

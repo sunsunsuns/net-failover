@@ -1,0 +1,15 @@
+[Unit]
+Description=zt-boot-connect: bring ZeroTier online ASAP after boot
+Documentation=http://10.209.251.101:8087/root/net-failover
+After=NetworkManager.service net-failover.service
+Wants=NetworkManager.service
+ConditionPathExists=/usr/sbin/zerotier-one
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/zt-boot-connect
+RemainAfterExit=yes
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
